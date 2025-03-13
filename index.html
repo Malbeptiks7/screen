@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Фото в бота</title>
+</head>
+<body>
+  <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
+  <button onclick="takePhoto()">Сделать фото</button>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <p id="status"></p>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const status = document.getElementById('status');
+
+    // Доступ к фронтальной камере
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+      .then(stream => video.srcObject = stream)
+      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
+
+    // Функция захвата и отправки фото
+    async function takePhoto() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0);
+      const photo = canvas.toDataURL('image/png');
+
+      // Telegram API
+      const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
+      const chatId = '5678878569'; // Твой chat_id
+      const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+
+      try {
+        status.textContent = 'Отправка...';
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            photo: photo
+          })
+        });
+        if (response.ok) {
+          status.textContent = 'Фото отправлено!';
+        } else {
+          status.textContent = 'Ошибка отправки';
+        }
+      } catch (error) {
+        status.textContent = 'Ошибка: ' + error;
+      }
+    }
+  </script>
+</body>
+</html>
